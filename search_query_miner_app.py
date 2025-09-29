@@ -94,6 +94,32 @@ class SearchQueryMiner:
                 'Reason': reason
             })
         return pd.DataFrame(results)
+        # Streamlit App
+def main():
+    st.set_page_config(page_title="Search Query Miner", page_icon="🔍", layout="wide")
+    
+    st.title("🔍 Google Ads Search Query Mining Tool")
+    st.markdown("**Automatically analyze your Google Ads search terms and get actionable recommendations**")
+    
+    # Sidebar for configuration
+    st.sidebar.header("⚙️ Configuration")
+    
+    # Brand terms input
+    brand_terms_input = st.sidebar.text_input(
+        "Brand Terms (comma-separated)", 
+        value="nike, nike.com",
+        help="Enter your brand terms separated by commas"
+    )
+    brand_terms = [term.strip().lower() for term in brand_terms_input.split(',') if term.strip()]
+    
+    # Competitor terms input
+    competitor_terms_input = st.sidebar.text_area(
+        "Competitor Terms (comma-separated)", 
+        value="adidas, puma, reebok, under armour, new balance",
+        help="Enter competitor brand names separated by commas"
+    )
+    competitor_terms = [term.strip().lower() for term in competitor_terms_input.split(',') if term.strip()]
+    
 
 def normalize_google_ads_csv(uploaded_file):
     """Handle messy Google Ads CSVs"""
