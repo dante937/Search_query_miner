@@ -89,25 +89,52 @@ class SearchQueryMiner:
             })
         return pd.DataFrame(results)
 
+# 🔧 Updated Robust Parser
 def normalize_google_ads_csv(uploaded_file):
-    df = pd.read_csv(uploaded_file)
-    df = df.dropna(axis=1,how="all")
-    if 'Search term' not in df.columns and 'search term' not in df.columns:
-        df = pd.read_csv(uploaded_file, skiprows=1)
+    """
+    Handle messy Google Ads CSV/TSV exports and normalize columns.
+    """
+    try:
+        df = pd.read_csv(uploaded_file)  # try comma
+    except Exception:
+        uploaded_file.seek(0)
+        df = pd.read_csv(uploaded_file, sep="\t")  # fallback: tab
+
+    df = df.dropna(axis=1, how="all")
+
+    # If metadata row at top, skip it
+    if not any("search term" in str(c).lower() for c in df.columns):
+        uploaded_file.seek(0)
+        try:
+            df = pd.read_csv(uploaded_file, skiprows=1)  # retry skipping first row
+        except Exception:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, sep="\t", skiprows=1)
+
+    # Normalize headers
     df.columns = df.columns.str.strip().str.lower()
+
     rename_map = {
         'search term': 'search term',
-        'clicks':'clicks',
-        'impressions':'impressions',
-        'cost':'cost',
-        'conversions':'conversions',
-        'all conv.':'conversions'
+        'clicks': 'clicks',
+        'impressions': 'impressions',
+        'cost': 'cost',
+        'conversions': 'conversions',
+        'all conv.': 'conversions',
+        'conversions (many-per-click)': 'conversions',
+        'conversions (1-per-click)': 'conversions'
     }
-    df = df.rename(columns={k:v for k,v in rename_map.items() if k in df.columns})
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
     required = ['search term','clicks','impressions','cost','conversions']
     missing = [c for c in required if c not in df.columns]
     if missing:
-        raise ValueError(f"Missing required columns: {missing}")
+        raise ValueError(f"Missing required columns: {missing}. Found columns: {list(df.columns)}")
+
+    # Ensure numeric
+    for col in ['clicks','impressions','cost','conversions']:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
     return df[required]
 
 # -----------------------
