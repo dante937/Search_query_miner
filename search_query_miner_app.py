@@ -89,29 +89,39 @@ class SearchQueryMiner:
             })
         return pd.DataFrame(results)
 
-# 🔧 Updated Robust Parser
+
+# 🔧 Updated Robust Parser with Encoding Handling
 def normalize_google_ads_csv(uploaded_file):
     """
-    Handle messy Google Ads CSV/TSV exports and normalize columns.
+    Handle messy Google Ads CSV/TSV exports, encodings, and normalize columns.
     """
-    try:
-        df = pd.read_csv(uploaded_file)  # try comma
-    except Exception:
-        uploaded_file.seek(0)
-        df = pd.read_csv(uploaded_file, sep="\t")  # fallback: tab
 
+    # Step 1: Try different encodings
+    df = None
+    for enc in ["utf-8", "utf-8-sig", "utf-16"]:
+        try:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, encoding=enc, on_bad_lines="skip")
+            break
+        except Exception:
+            continue
+    if df is None:
+        raise ValueError("Could not read file with supported encodings: utf-8, utf-8-sig, utf-16")
+
+    # Step 2: Drop empty cols
     df = df.dropna(axis=1, how="all")
 
-    # If metadata row at top, skip it
+    # Step 3: Retry if first row looks like metadata (date ranges)
     if not any("search term" in str(c).lower() for c in df.columns):
-        uploaded_file.seek(0)
-        try:
-            df = pd.read_csv(uploaded_file, skiprows=1)  # retry skipping first row
-        except Exception:
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, sep="\t", skiprows=1)
+        for enc in ["utf-8", "utf-8-sig", "utf-16"]:
+            try:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, skiprows=1, encoding=enc, on_bad_lines="skip")
+                break
+            except:
+                continue
 
-    # Normalize headers
+    # Step 4: Normalize headers
     df.columns = df.columns.str.strip().str.lower()
 
     rename_map = {
@@ -124,18 +134,20 @@ def normalize_google_ads_csv(uploaded_file):
         'conversions (many-per-click)': 'conversions',
         'conversions (1-per-click)': 'conversions'
     }
-    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+    df = df.rename(columns={k: v for k,v in rename_map.items() if k in df.columns})
 
+    # Step 5: Validate required columns
     required = ['search term','clicks','impressions','cost','conversions']
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}. Found columns: {list(df.columns)}")
 
-    # Ensure numeric
+    # Step 6: Ensure numeric
     for col in ['clicks','impressions','cost','conversions']:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     return df[required]
+
 
 # -----------------------
 # Streamlit App
